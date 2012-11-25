@@ -1,5 +1,5 @@
 Name:           libical
-BuildRequires:  db-devel
+BuildRequires:  db4-devel
 BuildRequires:  libtool
 BuildRequires:  pkg-config
 BuildRequires:  python-devel
