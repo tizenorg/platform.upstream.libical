@@ -11,6 +11,7 @@ License:        MPL-1.1 or LGPL-2.1
 Group:          Development/Libraries/C and C++
 Source:         libical-%{version}.tar.bz2
 Source2:        baselibs.conf
+Source1001: 	libical.manifest
 
 %description
 Libical is an open source implementation of the IETF's iCalendar
@@ -42,6 +43,7 @@ component properties, parameters, and subcomponents.
 
 %prep
 %setup -q
+cp %{SOURCE1001} .
 
 %build
 # triger autoreconf since the 0.46 tarball is missing autotools bootstrap files
@@ -69,11 +71,13 @@ autoreconf -f -i
 %postun -p /sbin/ldconfig
 
 %files 
+%manifest %{name}.manifest
 %defattr(-,root,root)
 %license COPYING
 %{_libdir}/*.so.*
 
 %files devel
+%manifest %{name}.manifest
 %defattr(-,root,root)
 %{_libdir}/*.so
 %{_libdir}/pkgconfig/libical.pc
@@ -81,6 +85,7 @@ autoreconf -f -i
 %{_includedir}/libical
 
 %files doc
+%manifest %{name}.manifest
 %defattr(-,root,root)
 %doc doc examples scripts
 
