@@ -276,7 +276,7 @@ icaltimezone_get_vtimezone_properties	(icaltimezone *zone,
 					 icalcomponent	*component)
 {
     icalproperty *prop;
-    const char *tzid, *tzname;
+    const char *tzid;
  
     prop = icalcomponent_get_first_property (component, ICAL_TZID_PROPERTY);
     if (!prop)
@@ -528,7 +528,7 @@ icaltimezone_expand_vtimezone		(icalcomponent	*comp,
     icalrecur_iterator* rrule_iterator;
     struct icaldatetimeperiodtype rdate;
     int found_dtstart = 0, found_tzoffsetto = 0, found_tzoffsetfrom = 0;
-    int has_recurrence = 0;
+    int has_rdate = 0, has_rrule = 0;
 
     /* First we check if it is a STANDARD or DAYLIGHT component, and
        just return if it isn't. */
@@ -560,8 +560,10 @@ icaltimezone_expand_vtimezone		(icalcomponent	*comp,
 	    found_tzoffsetfrom = 1;
 	    break;
 	case ICAL_RDATE_PROPERTY:
+            has_rdate = 1;
+            break;
 	case ICAL_RRULE_PROPERTY:
-	    has_recurrence = 1;
+            has_rrule = 1;
 	    break;
 	default:
 	    /* Just ignore any other properties. */
@@ -590,9 +592,9 @@ icaltimezone_expand_vtimezone		(icalcomponent	*comp,
 	    dtstart.hour, dtstart.minute, dtstart.second);
 #endif
 
-    /* If the STANDARD/DAYLIGHT component has no recurrence data, we just add
+    /* If the STANDARD/DAYLIGHT component has no recurrence rule, we add
        a single change for the DTSTART. */
-    if (!has_recurrence) {
+    if (!has_rrule) {
 	change.year   = dtstart.year;
 	change.month  = dtstart.month;
 	change.day    = dtstart.day;
@@ -611,12 +613,11 @@ icaltimezone_expand_vtimezone		(icalcomponent	*comp,
 
 	/* Add the change to the array. */
 	icalarray_append (changes, &change);
-	return;
     }
 
     /* The component has recurrence data, so we expand that now. */
     prop = icalcomponent_get_first_property (comp, ICAL_ANY_PROPERTY);
-    while (prop) {
+    while (prop && (has_rdate || has_rrule)) {
 #if 0
 	printf ("Expanding property...\n");
 #endif
@@ -672,9 +673,32 @@ icaltimezone_expand_vtimezone		(icalcomponent	*comp,
 		rrule.until.is_utc = 0;
 	    }
 
+        /* Add the dtstart to changes, otherwise some oddly-defined VTIMEZONE
+           components can cause the first year to get skipped. */
+        change.year   = dtstart.year;
+        change.month  = dtstart.month;
+        change.day    = dtstart.day;
+        change.hour   = dtstart.hour;
+        change.minute = dtstart.minute;
+        change.second = dtstart.second;
+        
+#if 0
+        printf ("  Appending RRULE element (Y/M/D): %i/%02i/%02i %i:%02i:%02i\n",
+                change.year, change.month, change.day,
+                change.hour, change.minute, change.second);
+#endif
+        
+        icaltimezone_adjust_change (&change, 0, 0, 0,
+                                    -change.prev_utc_offset);
+        
+        icalarray_append (changes, &change);
+
 	    rrule_iterator = icalrecur_iterator_new (rrule, dtstart);
 	    for (;rrule_iterator;) {
 		occ = icalrecur_iterator_next (rrule_iterator);
+		/* Skip dtstart since we just added it */
+        if (icaltime_compare(dtstart, occ) == 0)
+            continue;
 		if (occ.year > end_year || icaltime_is_null_time (occ))
 		    break;
 
@@ -883,9 +907,12 @@ icaltimezone_get_utc_offset		(icaltimezone	*zone,
 	change_num += step;
 
 	/* If we go past the start of the changes array, then we have no data
-	   for this time so we return a UTC offset of 0. */
-	if (change_num < 0)
-	    return 0;
+	   for this time so we return the prev UTC offset. */
+	if (change_num < 0) {
+	    if (is_daylight)
+		*is_daylight = ! tmp_change.is_daylight;
+	    return tmp_change.prev_utc_offset;
+	}
 
 	if ((unsigned int)change_num >= zone->changes->num_elements)
 	    break;
@@ -1354,7 +1381,7 @@ icaltimezone_get_builtin_timezone	(const char *location)
     if (!builtin_timezones)
 	icaltimezone_init_builtin_timezones ();
 
-    if (!strcmp (location, "UTC"))
+    if (strcmp (location, "UTC") == 0 || strcmp (location, "GMT") == 0)
 	return &utc_timezone;
     
 #if 0
@@ -1481,12 +1508,15 @@ icaltimezone_get_builtin_timezone_from_tzid (const char *tzid)
     if (!tzid || !tzid[0])
 	return NULL;
 
+    if (strcmp (tzid, "UTC") == 0 || strcmp (tzid, "GMT") == 0) {
+        return icaltimezone_get_builtin_timezone(tzid);
+    }
+
     /* Check that the TZID starts with our unique prefix. */
     if (strncmp (tzid, ical_tzid_prefix, strlen(ical_tzid_prefix)))
 	return NULL;
 
     /* Get the location, which is after the 3rd '/' character. */
-    p = tzid;
     for (p = tzid; *p; p++) {
 	if (*p == '/') {
 	    num_slashes++;
@@ -1770,6 +1800,11 @@ icaltimezone_load_builtin_timezone	(icaltimezone *zone)
     pthread_mutex_lock(&builtin_mutex);
     if (zone->component)
        goto out;
+#else
+#ifdef USE_BUILTIN_TZDATA
+    if (zone->component)
+       return;
+#endif
 #endif
 
 #ifdef USE_BUILTIN_TZDATA
@@ -1785,7 +1820,7 @@ icaltimezone_load_builtin_timezone	(icaltimezone *zone)
     filename = (char*) malloc (filename_len);
     if (!filename) {
 	icalerror_set_errno(ICAL_NEWFAILED_ERROR);
-	return;
+	goto out;
     }
 
     snprintf (filename, filename_len, "%s/%s.ics", get_zone_directory(),
@@ -1795,7 +1830,7 @@ icaltimezone_load_builtin_timezone	(icaltimezone *zone)
     free (filename);
     if (!fp) {
 	icalerror_set_errno(ICAL_FILE_ERROR);
-	return;
+	goto out;
     }
 
 	
@@ -1819,7 +1854,7 @@ icaltimezone_load_builtin_timezone	(icaltimezone *zone)
 
     if (!subcomp) {
 	icalerror_set_errno(ICAL_PARSE_ERROR);
-	return;
+	goto out;
     }
 
     icaltimezone_get_vtimezone_properties (zone, subcomp);
@@ -1829,10 +1864,12 @@ icaltimezone_load_builtin_timezone	(icaltimezone *zone)
     icalcomponent_free(comp);
     }
 #endif 
-#ifdef HAVE_PTHREAD
+
  out:
+#ifdef HAVE_PTHREAD
     pthread_mutex_unlock(&builtin_mutex);
 #endif
+    return;
 }
 
 
@@ -1886,7 +1923,6 @@ icaltimezone_dump_changes		(icaltimezone *zone,
     printf ("Num changes: %i\n", zone->changes->num_elements);
 #endif
 
-    change_num = 0;
     for (change_num = 0; (unsigned int)change_num < zone->changes->num_elements; change_num++) {
 	zone_change = icalarray_element_at (zone->changes, change_num);
 

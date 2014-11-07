@@ -143,6 +143,23 @@ icalvalue* icalvalue_new_clone(const icalvalue* old) {
 	    }
 	    break;
 	}
+    case ICAL_ACTION_VALUE:
+    {
+        new->data = old->data;
+        
+        if (old->data.v_enum == ICAL_ACTION_X) {
+            //preserve the custom action string
+            if (old->x_value != 0) {
+                new->x_value = icalmemory_strdup(old->x_value);
+                
+                if (new->x_value == 0) {
+                    icalvalue_free(new);
+                    return 0;
+                }
+            }
+        }
+        break;
+    }
 	case ICAL_RECUR_VALUE:
 	{
 	    if(old->data.v_recur != 0){
@@ -190,6 +207,7 @@ static char* icalmemory_strdup_and_dequote(const char* str)
     const char* p;
     char* out = (char*)malloc(sizeof(char) * strlen(str) +1);
     char* pout;
+    int wroteNull = 0;
 
     if (out == 0){
 	return 0;
@@ -197,7 +215,11 @@ static char* icalmemory_strdup_and_dequote(const char* str)
 
     pout = out;
 
-    for (p = str; *p!=0; p++){
+    /* Stop the loop when encountering a terminator in the source string
+       or if a null has been written to the destination. This prevents
+       reading past the end of the source string if the last character
+       is a backslash. */
+    for (p = str; !wroteNull && *p!=0; p++){
 	
 	if( *p == '\\')
 	{
@@ -205,6 +227,7 @@ static char* icalmemory_strdup_and_dequote(const char* str)
 	    switch(*p){
 		case 0:
 		{
+            wroteNull = 1; //stops iteration so p isn't incremented past the end of str
 		    *pout = '\0';
 		    break;
 
@@ -418,7 +441,7 @@ int simple_str_to_double(const char* from,
         return 1 ;
     }
     memset(tmp_buf, 0, TMP_NUM_SIZE+1) ;
-    i=0 ;
+
     /*
      * copy the float number string into tmp_buf, and take
      * care to have the (optional) decimal separator be the one
@@ -1052,12 +1075,23 @@ static char* icalvalue_float_as_ical_string_r(const icalvalue* value) {
 
     float data;
     char* str;
+    char* old_locale;
     icalerror_check_arg_rz( (value!=0),"value");
     data = icalvalue_get_float(value);
+
+    /* bypass current locale in order to make
+       sure snprintf uses a '.' as a separator
+       set locate to 'C' and keep old locale */
+    old_locale = strdup (setlocale (LC_NUMERIC,NULL));
+    setlocale (LC_NUMERIC,"C");
 
     str = (char*)icalmemory_new_buffer(40);
 
     snprintf(str,40,"%f",data);
+
+    /* restore saved locale */
+    setlocale (LC_NUMERIC,old_locale);
+    free (old_locale);
 
     return str;
 }
@@ -1067,13 +1101,24 @@ static char* icalvalue_geo_as_ical_string_r(const icalvalue* value) {
 
     struct icalgeotype data;
     char* str;
+    char* old_locale;
     icalerror_check_arg_rz( (value!=0),"value");
 
     data = icalvalue_get_geo(value);
 
+    /* bypass current locale in order to make
+     * sure snprintf uses a '.' as a separator
+     * set locate to 'C' and keep old locale */
+    old_locale = strdup (setlocale (LC_NUMERIC,NULL));
+    setlocale (LC_NUMERIC,"C");
+
     str = (char*)icalmemory_new_buffer(80);
 
     snprintf(str,80,"%f;%f",data.lat,data.lon);
+
+    /* restore saved locale */
+    setlocale (LC_NUMERIC,old_locale);
+    free (old_locale);
 
     return str;
 }

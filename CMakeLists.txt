@@ -3,7 +3,7 @@
 # Pass the following variables to cmake to control the build:
 # (See doc/UsingLibical.txt for more information)
 #
-# -DICAL_ERRORS_ARE_FATAL=[true|false] 
+# -DICAL_ERRORS_ARE_FATAL=[true|false]
 #  Set to make icalerror_* calls abort instead of internally signaling an error
 #  Default=false
 #
@@ -28,12 +28,23 @@
 #  Set to build static libraries only.
 #  Default=false (build shared and static libs)
 #
+# -DGOBJECT_INTROSPECTION=[true|false]
+#  Set to build GObject introspection "typelib" files
+#  Requires GObject Introspection development package v0.6.7 or higher
+#  Default=false (do not generate the introspection files)
+#
+# -DUSE_32BIT_TIME_T=[true|false]
+#  Set to build using a 32bit time_t (ignored unless building with MSVC on Windows)
+#  Default=false (use the default size of time_t)
+#
 
 project(libical)
 
 cmake_minimum_required(VERSION 2.4)
-#cannot use the following line with cmake 2.4.x
-#cmake_policy(VERSION 2.6)
+if(COMMAND cmake_policy)
+  cmake_policy(SET CMP0003 NEW)
+  cmake_policy(SET CMP0005 OLD)
+endif(COMMAND cmake_policy)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules)
 
@@ -46,10 +57,12 @@ if(WINCE)
   set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${WCECOMPAT_LIBRARIES})
 endif(WINCE)
 
-set(LIBICAL_LIB_MAJOR_VERSION "0")
-set(LIBICAL_LIB_MINOR_VERSION "48")
+set(LIBICAL_LIB_MAJOR_VERSION "1")
+set(LIBICAL_LIB_MINOR_VERSION "0")
 set(LIBICAL_LIB_PATCH_VERSION "0")
-set(LIBICAL_LIB_VERSION_STRING "${LIBICAL_LIB_MAJOR_VERSION}.${LIBICAL_LIB_MINOR_VERSION}.${LIBICAL_LIB_PATCH_VERSION}")
+set(LIBICAL_LIB_VERSION_STRING
+  "${LIBICAL_LIB_MAJOR_VERSION}.${LIBICAL_LIB_MINOR_VERSION}.${LIBICAL_LIB_PATCH_VERSION}"
+)
 
 set(PROJECT_VERSION "${LIBICAL_LIB_MAJOR_VERSION}.${LIBICAL_LIB_MINOR_VERSION}")
 set(PROJECT_URL "http://freeassociation.sf.net/")
@@ -65,15 +78,18 @@ endif(STATIC_LIBRARY)
 # must have Perl to create the derived stuff
 find_package(Perl REQUIRED)
 
-# make msvc less verbose
+# MSVC specific definitions
 if(WIN32)
   if(MSVC)
     add_definitions(-D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE -DYY_NO_UNISTD_H)
+    if(USE_32BIT_TIME_T)
+      add_definitions(-D_USE_32BIT_TIME_T)
+    endif(USE_32BIT_TIME_T)
   endif(MSVC)
   add_definitions(-DBIG_ENDIAN=0 -DLITTLE_ENDIAN=1 -DBYTE_ORDER=BIG_ENDIAN)
 endif(WIN32)
 
-set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)" )
+set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)")
 set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}" CACHE STRING "Library directory name" FORCE)
 set(INCLUDE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/include" CACHE STRING "Include directory name" FORCE)
 set(SHARE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/share" CACHE STRING "Share directory name" FORCE)
@@ -81,16 +97,16 @@ set(SHARE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/share" CACHE STRING "Share direct
 # set the output paths
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(WIN32)
-  set(LIBRARY_OUTPUT_PATH ${EXECUTABLE_OUTPUT_PATH} )
+  set(LIBRARY_OUTPUT_PATH ${EXECUTABLE_OUTPUT_PATH})
   set(LIB_INSTALL_DIR lib)
   set(BIN_INSTALL_DIR bin)
 else(WIN32)
-  set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib )
+  set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 endif(WIN32)
 
-IF(APPLE)
+if(APPLE)
   set(CMAKE_INSTALL_NAME_DIR ${LIB_DESTINATION})
-ENDIF(APPLE)
+endif(APPLE)
 
 if(NOT DEFINED ICAL_ERRORS_ARE_FATAL)
   set(ICAL_ERRORS_ARE_FATAL 0)
@@ -151,6 +167,16 @@ set(INSTALL_TARGETS_DEFAULT_ARGS
   LIBRARY DESTINATION ${LIB_INSTALL_DIR}
   ARCHIVE DESTINATION ${LIB_INSTALL_DIR}
 )
+
+if(GOBJECT_INTROSPECTION)
+  set(MIN_GOBJECT_INTROSPECTION "0.6.7")
+  find_package(GObjectIntrospection ${MIN_GOBJECT_INTROSPECTION})
+  if(INTROSPECTION_FOUND)
+    set(HAVE_INTROSPECTION TRUE)
+  else(INTROSPECTION_FOUND)
+    message(FATAL_ERROR "You requested to build with GObject Introspection but the necessary development package is missing or too low a version (version ${MIN_GOBJECT_INTROSPECTION} or higher is required)")
+  endif(INTROSPECTION_FOUND)
+endif(GOBJECT_INTROSPECTION)
 
 ################# build subdirs ########################
 

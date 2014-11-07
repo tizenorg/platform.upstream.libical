@@ -490,7 +490,7 @@ icalproperty* icalcomponent_get_current_property (icalcomponent* component)
 {
    icalerror_check_arg_rz( (component!=0),"component");
 
-   if ((component->property_iterator==0)){
+   if (component->property_iterator==0){
        return 0;
    }
 
@@ -1635,17 +1635,20 @@ struct icaltimetype icalcomponent_get_dtend(icalcomponent* comp)
     struct icaltimetype	ret = icaltime_null_time();
 
     if ( end_prop != 0) {
-	ret = icalcomponent_get_datetime(comp, end_prop);
-    } else if ( dur_prop != 0) { 
+        ret = icalcomponent_get_datetime(comp, end_prop);
+    } else if ( dur_prop != 0) {
 
-	struct icaltimetype start = 
-	    icalcomponent_get_dtstart(inner);
-	struct icaldurationtype duration = 
-	    icalproperty_get_duration(dur_prop);
+        struct icaltimetype start = icalcomponent_get_dtstart(inner);
+        struct icaldurationtype duration;
+        
+        //extra check to prevent empty durations from crashing
+        if (icalproperty_get_value(dur_prop)) {
+            duration = icalproperty_get_duration(dur_prop);
+        } else {
+            duration = icaldurationtype_null_duration();
+        }
 
-	struct icaltimetype end = icaltime_add(start,duration);
-
-	ret = end;
+        ret = icaltime_add(start,duration);
     }
 
     return ret;

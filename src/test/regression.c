@@ -2279,10 +2279,17 @@ void test_convenience(){
     icalcomponent_set_duration(c,icaldurationtype_from_string("PT1H30M"));
     duration = icaldurationtype_as_int(icalcomponent_get_duration(c))/60;
 
+#ifndef USE_BUILTIN_TZDATA
     ok("Start is 1997-08-01 12:00:00 Europe/Rome",
        (0 == strcmp("1997-08-01 12:00:00 /softwarestudio.org/Tzfile/Europe/Rome", ictt_as_string(icalcomponent_get_dtstart(c)))));
     ok("End is 1997-08-01 13:30:00 Europe/Rome",
        (0 == strcmp("1997-08-01 13:30:00 /softwarestudio.org/Tzfile/Europe/Rome", ictt_as_string(icalcomponent_get_dtend(c)))));
+#else
+    ok("Start is 1997-08-01 12:00:00 Europe/Rome",
+       (0 == strcmp("1997-08-01 12:00:00 /citadel.org/20070227_1/Europe/Rome", ictt_as_string(icalcomponent_get_dtstart(c)))));
+    ok("End is 1997-08-01 13:30:00 Europe/Rome",
+       (0 == strcmp("1997-08-01 13:30:00 /citadel.org/20070227_1/Europe/Rome", ictt_as_string(icalcomponent_get_dtend(c)))));
+#endif
     ok("Duration is 90 m", (duration == 90));
 
     icalcomponent_free(c);
@@ -3740,6 +3747,33 @@ void test_icalcomponent_new_from_string(void)
     icalcomponent_free(comp);
 }
 
+void test_comma_in_quoted_value(void)
+{
+    icalcomponent *c;
+    icalproperty *p;
+
+    static const char test_icalcomp_str[] =
+"BEGIN:VEVENT\n"
+"X-TEST;VALUE=URI:\"geo:10.123456,-70.123456\"\n"
+"END:VEVENT\n";
+
+    c = icalparser_parse_string ((char *) test_icalcomp_str);
+    ok("icalparser_parse_string()", (c != NULL));
+    if (!c) {
+	exit (EXIT_FAILURE);
+    }
+
+    if (VERBOSE) printf("%s",icalcomponent_as_ical_string(c));
+
+    p = icalcomponent_get_first_property(c,ICAL_X_PROPERTY);
+    ok("x-property is correct kind",(icalproperty_isa(p) == ICAL_X_PROPERTY));
+    is("icalproperty_get_x_name() works",
+       icalproperty_get_x_name(p),"X-TEST");
+    is("icalproperty_get_value_as_string() works",
+       icalproperty_get_value_as_string(p),"\"geo:10.123456,-70.123456\"");
+
+    icalcomponent_free(c);
+}
 
 int main(int argc, char *argv[])
 {
@@ -3784,7 +3818,7 @@ int main(int argc, char *argv[])
     }
 #else
     if (argc>1)
-      do_test = atoi(argv[2]);
+      do_test = atoi(argv[1]);
 
 #endif
 
@@ -3849,6 +3883,7 @@ int main(int argc, char *argv[])
     test_run("Test exclusion of recurrences as per r961", test_recurrenceexcluded, do_test, do_header);
     test_run("Test bad dtstart in timezone as per r960", test_bad_dtstart_in_timezone, do_test, do_header);
     test_run("Test icalcomponent_new_from_string()", test_icalcomponent_new_from_string, do_test, do_header);
+    test_run("Test comma in quoted value of x property", test_comma_in_quoted_value, do_test, do_header);
 
     /** OPTIONAL TESTS go here... **/
 
@@ -3859,7 +3894,6 @@ int main(int argc, char *argv[])
 #ifdef WITH_BDB
     test_run("Test BDB Set", test_bdbset, do_test, do_header);
 #endif
-
 
     icaltimezone_free_builtin_timezones();
     icalmemory_free_ring();
