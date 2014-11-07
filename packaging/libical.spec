@@ -1,17 +1,17 @@
 Name:           libical
+Version:        1.0.0
+Release:        0
+Url:            https://github.com/libical/libical/archive/v1.0.0.tar.gz
+Summary:        An Implementation of Basic iCAL Protocols
+License:        MPL-1.1 or LGPL-2.1
+Group:          Development/Libraries
+Source:         %{name}-%{version}.tar.bz2
+Source2:        baselibs.conf
+Source1001:     %{name}.manifest
 BuildRequires:  db4-devel
 BuildRequires:  libtool
 BuildRequires:  pkg-config
 BuildRequires:  python-devel
-Url:            http://sourceforge.net/projects/freeassociation/
-Version:        0.48
-Release:        0
-Summary:        An Implementation of Basic iCAL Protocols
-License:        MPL-1.1 or LGPL-2.1
-Group:          Development/Libraries/C and C++
-Source:         libical-%{version}.tar.bz2
-Source2:        baselibs.conf
-Source1001: 	libical.manifest
 
 %description
 Libical is an open source implementation of the IETF's iCalendar
@@ -21,8 +21,8 @@ component properties, parameters, and subcomponents.
 
 %package devel
 Summary:        An implementation of basic iCAL protocols
-Group:          Development/Libraries/C and C++
-Requires:       libical = %{version}
+Group:          Development/Libraries
+Requires:       %{name} = %{version}
 
 %description devel
 Libical is an Open Source implementation of the IETF's iCalendar
@@ -30,12 +30,12 @@ Calendaring and Scheduling protocols. (RFC 2445, 2446, and 2447). It
 parses iCal components and provides a C API for manipulating the
 component properties, parameters, and subcomponents.
 
-%package doc
+%package docs
 Summary:        An Implementation of Basic iCAL Protocols
-Group:          Development/Libraries/C and C++
-Requires:       libical = %{version}
+Group:          Development/Libraries
+Requires:       %{name} = %{version}
 
-%description doc
+%description docs
 Libical is an open source implementation of the IETF's iCalendar
 calendaring and scheduling protocols (RFC 2445, 2446, and 2447). It
 parses iCal components and provides a C API for manipulating the
@@ -84,9 +84,8 @@ autoreconf -f -i
 %{_includedir}/ical.h
 %{_includedir}/libical
 
-%files doc
+%files docs
 %manifest %{name}.manifest
 %defattr(-,root,root)
 %doc doc examples scripts
 
-%changelog
